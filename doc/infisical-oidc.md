@@ -6,7 +6,7 @@ Self-hosted Infisical: `https://vault.svc.eh168.alexson.org`
 
 Secrets are loaded into **`GITHUB_ENV`** in the **same job** (values are masked in logs). There is no `.env` file or artifact export.
 
-The action never logs secret **values**—only Infisical key names, target env var names, and OIDC claims (`sub`, `aud`, …) for debugging. API error bodies are redacted. Multiline secrets (SSH keys) use one `::add-mask::` workflow command **per line** so GitHub does not echo the remainder of the key to the log.
+On success the action is **silent** (no notices). It writes secrets to `GITHUB_ENV` and emits `::add-mask::` workflow commands on stdout (one per line for multiline values) so GitHub redacts them in later steps—that is not optional logging. Failures print redacted `::error::` messages to stderr, including OIDC `sub`/`aud` only when login fails.
 
 > **Note:** `GITHUB_ENV` does not carry across jobs. Call `infisical-oidc-load` in the job that runs your playbook or deploy steps—not in a separate `fetch-secrets` job.
 
@@ -109,8 +109,8 @@ The action requests the OIDC token with audience `https://github.com/<repository
 
 ## Debug a failing run
 
-Re-run the workflow; the **Fetch secrets from Infisical** step prints **OIDC claims for Infisical** (`sub`, `aud`, …) before login. Match those values in the machine identity, or widen globs after v0.160.7.
+On OIDC login failure the step logs `sub` and `aud` in the error line. Match those in the machine identity, or widen globs after v0.160.7. For other failures, check HTTP status and the redacted API message in the log.
 
 ### GitHub org OIDC customization
 
-If **Organization → Settings → Actions → OIDC** changes the default `sub` format, simple `repo:org/repo:*` globs will not match. Reset to the default subject template or set Infisical **Subject** from the exact `sub` printed in the log.
+If **Organization → Settings → Actions → OIDC** changes the default `sub` format, simple `repo:org/repo:*` globs will not match. Reset to the default subject template or set Infisical **Subject** from the `sub` in the login error.

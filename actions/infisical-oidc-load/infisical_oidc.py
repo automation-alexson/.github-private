@@ -81,16 +81,29 @@ def _safe_error_body(body: str, *, max_len: int = 500) -> str:
         return text
 
 
+def _oidc_claims_summary(jwt: str) -> str:
+    b64 = jwt.split(".")[1]
+    b64 += "=" * (-len(b64) % 4)
+    payload = json.loads(base64.urlsafe_b64decode(b64))
+    sub = payload.get("sub", "")
+    aud = payload.get("aud", "")
+    return f"sub={sub!r} aud={aud!r}"
+
+
 def register_masks(value: str) -> None:
-    """Register GitHub log masks. Each line is a separate workflow command (multiline-safe)."""
+    """Register GitHub log masks (stdout workflow commands; not user-facing logs)."""
     if not value:
         return
-    # A single ::add-mask:: line must not contain newlines; otherwise GitHub logs the rest verbatim.
+    # One ::add-mask:: per line — multiline values must not use embedded newlines.
     lines = value.splitlines() if "\n" in value or "\r" in value else [value]
     for line in lines:
         if line:
             sys.stdout.write(f"::add-mask::{line}\n")
     sys.stdout.flush()
+
+
+def log_error(message: str) -> None:
+    print(f"::error::{message}", file=sys.stderr)
 
 
 def append_github_env(name: str, value: str) -> None:
@@ -118,13 +131,6 @@ def main() -> int:
     jwt_path = os.environ["JWT_FILE"]
 
     jwt = Path(jwt_path).read_text(encoding="utf-8").strip()
-    b64 = jwt.split(".")[1]
-    b64 += "=" * (-len(b64) % 4)
-    payload = json.loads(base64.urlsafe_b64decode(b64))
-    keys = ("sub", "aud", "iss", "repository", "ref", "environment", "workflow_ref", "job_workflow_ref")
-    claims = {k: payload.get(k) for k in keys}
-    print("::notice title=OIDC claims for Infisical::Set Subject and Audiences to these exact values:")
-    print(json.dumps(claims, indent=2))
 
     login_body = urllib.parse.urlencode({"identityId": identity_id, "jwt": jwt}).encode()
     login_req = urllib.request.Request(
@@ -138,28 +144,22 @@ def main() -> int:
             login_json = json.load(resp)
     except urllib.error.HTTPError as exc:
         body = exc.read().decode(errors="replace")
-        print(
-            f"::error::Infisical OIDC login failed ({exc.code}): {_safe_error_body(body)}",
-            file=sys.stderr,
+        log_error(
+            f"Infisical OIDC login failed ({exc.code}): {_safe_error_body(body)} "
+            f"({_oidc_claims_summary(jwt)})"
         )
-        hint = "Check Subject and Audiences against sub/aud above."
         if "claim not allowed" in body.lower():
-            hint = (
-                "Subject/Audience matched; failure is in Infisical **Claims**. "
-                "Remove all rows under Claims and Claim metadata mapping."
-            )
+            log_error("Clear Infisical Claims and claim metadata mapping.")
         elif "subject not allowed" in body.lower():
-            hint = "Set Subject to sub above, or repo:*-alexson/* on v0.160.4+."
+            log_error("Set Infisical Subject to sub above, or repo:*-alexson/* on v0.160.4+.")
         elif "audience not allowed" in body.lower():
-            hint = "Set Audiences to aud above, or https://github.com/*-alexson."
-        print(f"::error::{hint}", file=sys.stderr)
+            log_error("Set Infisical Audiences to aud above, or https://github.com/*-alexson.")
         return 1
 
     token = login_json.get("accessToken")
     if not token:
-        print(
-            f"::error::No accessToken in OIDC login response (keys: {', '.join(sorted(login_json.keys()))})",
-            file=sys.stderr,
+        log_error(
+            f"No accessToken in OIDC login response (keys: {', '.join(sorted(login_json.keys()))})"
         )
         return 1
     register_masks(token)
@@ -174,24 +174,18 @@ def main() -> int:
                 project_json = json.load(resp)
         except urllib.error.HTTPError as exc:
             body = exc.read().decode(errors="replace")
-            print(
-                f"::error::Project '{project_slug}' lookup failed ({exc.code}): {_safe_error_body(body)}",
-                file=sys.stderr,
-            )
+            log_error(f"Project '{project_slug}' lookup failed ({exc.code}): {_safe_error_body(body)}")
             if "ProjectMembershipNotFound" in body or "not a member of this project" in body:
-                print(
-                    "::error::Add the machine identity under Project → Settings → Access Control → Machine Identities.",
-                    file=sys.stderr,
+                log_error(
+                    "Add the machine identity under Project → Access Control → Machine Identities."
                 )
             return 1
         project_id = project_json.get("id") or project_json.get("_id") or ""
         if not project_id:
-            print(
-                f"::error::Project lookup returned no id (keys: {', '.join(sorted(project_json.keys()))})",
-                file=sys.stderr,
+            log_error(
+                f"Project lookup returned no id (keys: {', '.join(sorted(project_json.keys()))})"
             )
             return 1
-        print(f"::notice::Resolved project slug '{project_slug}' -> {project_id}")
 
     params = urllib.parse.urlencode(
         {
@@ -213,10 +207,7 @@ def main() -> int:
             secrets_json = json.load(resp)
     except urllib.error.HTTPError as exc:
         body = exc.read().decode(errors="replace")
-        print(
-            f"::error::Infisical secrets export failed ({exc.code}): {_safe_error_body(body)}",
-            file=sys.stderr,
-        )
+        log_error(f"Infisical secrets export failed ({exc.code}): {_safe_error_body(body)}")
         return 1
 
     values: dict[str, str] = {s["secretKey"]: s["secretValue"] for s in secrets_json.get("secrets", [])}
@@ -225,40 +216,21 @@ def main() -> int:
             values.setdefault(s["secretKey"], s["secretValue"])
 
     if secret_keys is not None:
-        missing = secret_keys - values.keys()
         values = {k: v for k, v in values.items() if k in secret_keys}
-        if missing:
-            print(
-                f"::warning::Requested secret key(s) not found at secretPath={secret_path}: "
-                f"{', '.join(sorted(missing))}",
-            )
         if not values:
-            print(
-                f"::error::No matching secrets for secret_keys={', '.join(sorted(secret_keys))} "
-                f"at project={project_id} environment={env_slug} secretPath={secret_path} "
-                f"recursive={recursive}.",
-                file=sys.stderr,
+            log_error(
+                f"No secrets matched secret_keys={', '.join(sorted(secret_keys))} "
+                f"environment={env_slug} secretPath={secret_path} recursive={recursive}."
             )
             return 1
     elif not values:
-        print(
-            f"::error::No secrets returned for project={project_id} environment={env_slug} "
-            f"secretPath={secret_path} recursive={recursive}.",
-            file=sys.stderr,
+        log_error(
+            f"No secrets at environment={env_slug} secretPath={secret_path} recursive={recursive}."
         )
         return 1
 
-    print(f"::notice::Secret keys: {', '.join(sorted(values.keys()))}")
-
-    loaded_env_names: list[str] = []
     for key, value in values.items():
-        env_name = env_name_for_secret(key)
-        append_github_env(env_name, value)
-        loaded_env_names.append(env_name)
-    print(
-        f"::notice::Loaded {len(values)} secret(s) into job environment: "
-        f"{', '.join(sorted(loaded_env_names))}"
-    )
+        append_github_env(env_name_for_secret(key), value)
 
     return 0
 
