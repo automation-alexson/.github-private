@@ -29,10 +29,39 @@ No per-repo Subject configuration in YAML — binding is entirely in Infisical.
 |--------|--------|
 | OIDC Discovery URL | `https://token.actions.githubusercontent.com` |
 | Issuer | `https://token.actions.githubusercontent.com` |
-| **Subject** | `repo:{infrastructure-alexson,general-alexson}/*:*` |
-| **Audiences** | `https://github.com/infrastructure-alexson` **and** `https://github.com/general-alexson` (two entries) |
+| **Subject** | `repo:*-alexson/*` (see below) |
+| **Audiences** | Two **separate** rows — not one comma-separated line |
 
-Infisical supports [glob patterns](https://infisical.com/docs/documentation/platform/identities/oidc-auth/general); `*` matches any characters including `:` and `/`. Brace groups match either org’s repos and any workflow context (`ref`, `environment`, etc.).
+### Subject (fix for “OIDC subject not allowed”)
+
+Infisical’s examples use braces only for **repo names inside one org** (`repo:my-org/{app,api}:*`). A pattern like `repo:{infrastructure-alexson,general-alexson}/*:*` often **does not match** and produces **403 subject not allowed**.
+
+Use one of these instead:
+
+| Subject pattern | Use when |
+|-----------------|----------|
+| `repo:*-alexson/*` | Both orgs end with `-alexson` (recommended) |
+| `repo:infrastructure-alexson/*` | Only `infrastructure-alexson` repos |
+| `repo:infrastructure-alexson/haproxy-rocky9:*` | Testing one repo (copy exact `sub` from debug) |
+
+`*` should match `:` and `/` in the subject (e.g. `repo:org/repo:ref:refs/heads/main`). **Infisical before the picomatch `bash: true` fix** (deployed here as `v0.158.0`) often rejects all `repo:…/*` globs — use an **exact** `sub` from the workflow log step **Log GitHub OIDC claims**, or upgrade `infisical_image_tag` (e.g. `v0.160.4` or newer).
+
+Example exact subject for `haproxy-rocky9` on `main` via workflow dispatch:
+
+```text
+repo:infrastructure-alexson/haproxy-rocky9:ref:refs/heads/main
+```
+
+### Audiences
+
+Add **two audience values** as separate entries in the UI:
+
+1. `https://github.com/infrastructure-alexson`
+2. `https://github.com/general-alexson`
+
+Do **not** put both URLs in one field separated by a comma — that is treated as a single audience string and will not match GitHub’s `aud` claim.
+
+Infisical supports [glob patterns](https://infisical.com/docs/documentation/platform/identities/oidc-auth/general).
 
 Tighter examples (if you want less scope later):
 
@@ -64,3 +93,7 @@ with:
 ```
 
 Compare printed `sub` and `aud` to the Infisical identity; adjust globs if a repo lives outside those two org names.
+
+### GitHub org OIDC customization
+
+If **Organization → Settings → Actions → OIDC** (or per-repo OIDC customization) changes the default `sub` format, simple `repo:org/repo:*` globs will not match. Either reset to the default subject template or set Infisical **Subject** from the exact `sub` printed by `debug_oidc: true`.
