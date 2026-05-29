@@ -1,8 +1,12 @@
-# .github/workflows/reusable-infisical-fetch.yml
+# Reusable workflow: fetch Infisical secrets into .env and upload for caller jobs.
 name: Infisical Fetch
 
 on:
   workflow_call:
+    outputs:
+      env-artifact-name:
+        description: Artifact name containing the .env file
+        value: ${{ jobs.fetch-and-run.outputs.env-artifact-name }}
 
 env:
   INFISICAL_IDENTITY_ID: '8977b274-e440-4612-9097-69faf3ecbe2a'
@@ -12,23 +16,41 @@ env:
 jobs:
   fetch-and-run:
     runs-on: [self-hosted, linux, infra]
-    # Required for OIDC authentication
     permissions:
       id-token: write
       contents: read
-      
+    outputs:
+      env-artifact-name: ${{ steps.meta.outputs.name }}
+
     steps:
-      - name: Checkout Code
+      - name: Set artifact name output
+        id: meta
+        run: echo "name=infisical-env" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      # Connects to Infisical and injects secrets as environment variables
-      - name: Fetch Secrets from Infisical
+      - name: Fetch secrets from Infisical
         uses: Infisical/secrets-action@v1
         with:
           client-id: ${{ env.INFISICAL_IDENTITY_ID }}
           env-slug: ${{ env.INFISICAL_ENV_SLUG }}
           project-id: ${{ env.INFISICAL_SECRETS_PROJECT_ID }}
-          # Specifying OIDC means no static client-secret is needed
-          auth-method: 'oidc'
-          export-type: 'file'
-          file-path: '.env'
+          auth-method: oidc
+          export-type: file
+          file-path: .env
+
+      - name: Verify .env was created
+        run: |
+          set -euo pipefail
+          test -s .env
+          echo "::notice::Infisical exported $(wc -l < .env) line(s) to .env (keys only, not values)."
+
+      - name: Upload .env artifact for caller workflows
+        id: upload-env
+        uses: actions/upload-artifact@v4
+        with:
+          name: infisical-env
+          path: .env
+          retention-days: 1
+          if-no-files-found: error
