@@ -98,6 +98,7 @@ The reusable workflow sets `oidc-audience` to `https://github.com/<repository_ow
 2. Workflow has `permissions: id-token: write`.
 3. Self-hosted runner can reach `vault.svc.eh168.alexson.org` (if using default `infisical_domain`).
 4. **Project access:** machine identity added to the project; on Infisical **v0.160+** the workflow resolves `project_slug` via `/api/v1/projects/slug/...` then exports with `/api/v4/secrets/`. If slug lookup 404s, pass `project_id` (UUID from the project URL in the Infisical UI).
+5. **Secrets path / environment:** default export uses `env_slug: prod`, `secret_path: /`, `recursive: true` (includes folders like `/Ansible`). If you see `exported 0 secret(s)`, verify the environment slug in Infisical matches `prod` and secrets exist there (e.g. `Ansible/ansible-ssh-private-key`).
 
 ## Debug a failing repo
 

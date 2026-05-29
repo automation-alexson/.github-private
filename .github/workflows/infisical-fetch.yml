@@ -35,10 +35,15 @@ on:
         type: string
         default: ""
       secret_path:
-        description: Infisical secret path
+        description: Infisical folder path (use / for all folders when recursive is true)
         required: false
         type: string
         default: /
+      recursive:
+        description: Include secrets in subfolders (required if secrets live under e.g. /Ansible)
+        required: false
+        type: boolean
+        default: true
     outputs:
       env-artifact-name:
         description: Artifact name containing the .env file
@@ -70,6 +75,7 @@ jobs:
           PROJECT_SLUG: ${{ inputs.project_slug }}
           PROJECT_ID: ${{ inputs.project_id }}
           SECRET_PATH: ${{ inputs.secret_path }}
+          RECURSIVE: ${{ inputs.recursive }}
           OIDC_AUDIENCE: ${{ inputs.oidc_audience != '' && inputs.oidc_audience || format('https://github.com/{0}', github.repository_owner) }}
         run: |
           set -euo pipefail
@@ -89,6 +95,7 @@ jobs:
           project_slug = os.environ["PROJECT_SLUG"]
           project_id = os.environ.get("PROJECT_ID", "").strip()
           secret_path = os.environ["SECRET_PATH"]
+          recursive = os.environ.get("RECURSIVE", "true").lower() in ("1", "true", "yes")
           jwt = open(os.environ["JWT_FILE"], encoding="utf-8").read().strip()
 
           b64 = jwt.split(".")[1]
@@ -169,8 +176,9 @@ jobs:
                   "environment": env_slug,
                   "projectId": project_id,
                   "includeImports": "true",
-                  "recursive": "false",
+                  "recursive": "true" if recursive else "false",
                   "expandSecretReferences": "true",
+                  "viewSecretValue": "true",
               }
           )
           secrets_req = urllib.request.Request(
@@ -195,6 +203,21 @@ jobs:
           for imp in reversed(secrets_json.get("imports") or []):
               for s in imp.get("secrets") or []:
                   values.setdefault(s["secretKey"], s["secretValue"])
+
+          if not values:
+              print(
+                  f"::error::No secrets returned for project={project_id} environment={env_slug} "
+                  f"secretPath={secret_path} recursive={recursive}.",
+                  file=sys.stderr,
+              )
+              print(
+                  "::error::In Infisical, confirm secrets exist in that environment (slug must match env_slug, e.g. prod), "
+                  "often under folder /Ansible. Check the machine identity role can read secret values.",
+                  file=sys.stderr,
+              )
+              sys.exit(1)
+
+          print(f"::notice::Secret keys: {', '.join(sorted(values.keys()))}")
 
           lines = []
           for key, value in values.items():
