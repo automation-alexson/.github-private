@@ -44,6 +44,8 @@ jobs:
 
 Known Infisical keys are mapped to stable env names (e.g. `ansible-ssh-private-key` → `ANSIBLE_SSH_PRIVATE_KEY`). Other keys are uppercased with non-alphanumeric characters replaced by `_`.
 
+After load, write the SSH key to a temp file and run Ansible per [ansible-ci-ssh-key.md](ansible-ci-ssh-key.md).
+
 No per-repo Subject configuration in YAML — binding is entirely in Infisical.
 
 ## Infisical OIDC settings (both orgs)
