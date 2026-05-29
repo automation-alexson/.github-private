@@ -11,7 +11,7 @@ on:
 env:
   INFISICAL_IDENTITY_ID: '8977b274-e440-4612-9097-69faf3ecbe2a'
   INFISICAL_ENV_SLUG: 'prod'
-  INFISICAL_SECRETS_PROJECT_ID: 'Secrets'
+  INFISICAL_PROJECT_SLUG: 'Secrets'
 
 jobs:
   fetch-and-run:
@@ -31,14 +31,14 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Fetch secrets from Infisical
-        uses: Infisical/secrets-action@v1
+        uses: Infisical/secrets-action@v1.0.16
         with:
-          client-id: ${{ env.INFISICAL_IDENTITY_ID }}
+          method: oidc
+          identity-id: ${{ env.INFISICAL_IDENTITY_ID }}
           env-slug: ${{ env.INFISICAL_ENV_SLUG }}
-          project-id: ${{ env.INFISICAL_SECRETS_PROJECT_ID }}
-          auth-method: oidc
+          project-slug: ${{ env.INFISICAL_PROJECT_SLUG }}
           export-type: file
-          file-path: .env
+          file-output-path: .env
 
       - name: Verify .env was created
         run: |
