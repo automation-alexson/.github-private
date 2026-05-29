@@ -18,7 +18,7 @@ on:
         description: Infisical project slug (used when project_id is empty)
         required: false
         type: string
-        default: Secrets
+        default: secrets-vi-5-a
       project_id:
         description: Infisical project UUID (from project URL; preferred on v0.160+)
         required: false

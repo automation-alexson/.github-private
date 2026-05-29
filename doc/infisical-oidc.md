@@ -6,7 +6,7 @@ Self-hosted Infisical: `https://vault.svc.eh168.alexson.org`
 
 ## One identity for all repos
 
-Use a **single** organization machine identity with **OIDC Auth** (not Universal Auth). Add it to each Infisical project it should read (e.g. project slug `Secrets`, environment `prod`).
+Use a **single** organization machine identity with **OIDC Auth** (not Universal Auth). Add it to each Infisical project it should read (e.g. project slug `secrets-vi-5-a`, environment `prod`).
 
 Callers only need:
 
