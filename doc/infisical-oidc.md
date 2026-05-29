@@ -29,40 +29,33 @@ No per-repo Subject configuration in YAML — binding is entirely in Infisical.
 |--------|--------|
 | OIDC Discovery URL | `https://token.actions.githubusercontent.com` |
 | Issuer | `https://token.actions.githubusercontent.com` |
-| **Subject** | `repo:*-alexson/*` (see below) |
-| **Audiences** | Two **separate** rows — not one comma-separated line |
+| **Subject** | `repo:*-alexson/*` |
+| **Audiences** | `https://github.com/*-alexson` (glob) or two exact org URLs (see below) |
 
-### Subject (fix for “OIDC subject not allowed”)
+Requires **Infisical v0.160.4+** (`infisical_image_tag: v0.160.7` in `infisical-microk8s`) so `*` matches `/` in GitHub `sub` claims. On **v0.158.x**, globs fail — use exact `sub`/`aud` from the workflow log until upgraded.
 
-Infisical’s examples use braces only for **repo names inside one org** (`repo:my-org/{app,api}:*`). A pattern like `repo:{infrastructure-alexson,general-alexson}/*:*` often **does not match** and produces **403 subject not allowed**.
-
-Use one of these instead:
+### Subject
 
 | Subject pattern | Use when |
 |-----------------|----------|
-| `repo:*-alexson/*` | Both orgs end with `-alexson` (recommended) |
-| `repo:infrastructure-alexson/*` | Only `infrastructure-alexson` repos |
-| `repo:infrastructure-alexson/haproxy-rocky9:*` | Testing one repo (copy exact `sub` from debug) |
+| `repo:*-alexson/*` | All repos in `infrastructure-alexson` and `general-alexson` (recommended) |
+| `repo:infrastructure-alexson/*` | One org only |
+| `repo:infrastructure-alexson/haproxy-rocky9:ref:refs/heads/main` | Single branch (debug / lockdown) |
 
-`*` should match `:` and `/` in the subject (e.g. `repo:org/repo:ref:refs/heads/main`). **Infisical before the picomatch `bash: true` fix** (deployed here as `v0.158.0`) often rejects all `repo:…/*` globs — use an **exact** `sub` from the workflow log step **Log GitHub OIDC claims**, or upgrade `infisical_image_tag` (e.g. `v0.160.4` or newer).
-
-Example exact values for `haproxy-rocky9` on `main` (copy from workflow log **OIDC claims for Infisical**):
-
-| Field | Value |
-|--------|--------|
-| **Subject** | `repo:infrastructure-alexson/haproxy-rocky9:ref:refs/heads/main` |
-| **Audiences** | `https://github.com/infrastructure-alexson` |
-
-Do not use globs for Subject/Audience on **v0.158.0** until Infisical is upgraded.
+Avoid `repo:{infrastructure-alexson,general-alexson}/*:*` — brace groups across org names often do not match.
 
 ### Audiences
 
-Add **two audience values** as separate entries in the UI:
+Either one glob:
+
+```text
+https://github.com/*-alexson
+```
+
+Or two **separate** rows (not comma-separated in one field):
 
 1. `https://github.com/infrastructure-alexson`
 2. `https://github.com/general-alexson`
-
-Do **not** put both URLs in one field separated by a comma — that is treated as a single audience string and will not match GitHub’s `aud` claim.
 
 Infisical supports [glob patterns](https://infisical.com/docs/documentation/platform/identities/oidc-auth/general).
 
@@ -77,7 +70,7 @@ Tighter examples (if you want less scope later):
 
 GitHub sets the JWT `aud` claim to the **repository owner** org URL by default (`https://github.com/<owner>`). Repos under `general-alexson` send a different `aud` than `infrastructure-alexson` repos — list **both** in Infisical Audiences.
 
-You usually do **not** need `oidc-audience` on `Infisical/secrets-action` unless you intentionally use one custom audience everywhere; then set `oidc-audience` in the workflow **and** add that same value in Infisical.
+The reusable workflow sets `oidc-audience` to `https://github.com/<repository_owner>` automatically.
 
 ## Caller requirements
 
@@ -87,15 +80,7 @@ You usually do **not** need `oidc-audience` on `Infisical/secrets-action` unless
 
 ## Debug a failing repo
 
-Re-run with `debug_oidc: true`:
-
-```yaml
-uses: infrastructure-alexson/.github-private/.github/workflows/infisical-fetch.yml@main
-with:
-  debug_oidc: true
-```
-
-Compare printed `sub` and `aud` to the Infisical identity; adjust globs if a repo lives outside those two org names.
+Re-run the workflow; the **Fetch secrets from Infisical via OIDC** step prints **OIDC claims for Infisical** (`sub`, `aud`, …) before login. Match those values in the machine identity, or widen globs after v0.160.7.
 
 ### GitHub org OIDC customization
 

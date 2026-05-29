@@ -106,7 +106,7 @@ jobs:
               body = exc.read().decode(errors="replace")
               print(f"::error::Infisical OIDC login failed ({exc.code}): {body}", file=sys.stderr)
               print(
-                  "::error::In Infisical, set Subject to the sub value and Audiences to the aud value above (exact match; avoid globs on v0.158.x).",
+                  "::error::In Infisical, set Subject/Audiences to the sub/aud above, or use repo:*-alexson/* and https://github.com/*-alexson on Infisical v0.160.4+.",
                   file=sys.stderr,
               )
               sys.exit(1)
