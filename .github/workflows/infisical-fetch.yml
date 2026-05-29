@@ -29,11 +29,11 @@ on:
         required: false
         type: string
         default: ""
-      debug_oidc:
-        description: Print GitHub OIDC sub/aud/iss before fetch (for Infisical identity binding)
+      secret_path:
+        description: Infisical secret path
         required: false
-        type: boolean
-        default: false
+        type: string
+        default: /
     outputs:
       env-artifact-name:
         description: Artifact name containing the .env file
@@ -56,45 +56,104 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Log GitHub OIDC claims (Infisical subject binding)
-        id: oidc_claims
+      - name: Fetch secrets from Infisical via OIDC
+        id: infisical
         env:
+          INFISICAL_DOMAIN: ${{ inputs.infisical_domain }}
+          IDENTITY_ID: ${{ inputs.identity_id }}
+          ENV_SLUG: ${{ inputs.env_slug }}
+          PROJECT_SLUG: ${{ inputs.project_slug }}
+          SECRET_PATH: ${{ inputs.secret_path }}
           OIDC_AUDIENCE: ${{ inputs.oidc_audience != '' && inputs.oidc_audience || format('https://github.com/{0}', github.repository_owner) }}
         run: |
           set -euo pipefail
+          JWT_FILE="${RUNNER_TEMP}/github-oidc.jwt"
+          export JWT_FILE
+
           URL="${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=${OIDC_AUDIENCE}"
-          TOKEN=$(curl -sf -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" "$URL" | jq -r '.value')
-          export TOKEN
+          curl -sf -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" "$URL" | jq -r '.value' > "$JWT_FILE"
+
           python3 <<'PY'
-          import base64, json, os
-          b64 = os.environ["TOKEN"].split(".")[1]
+          import base64, json, os, sys, urllib.parse, urllib.request
+          from pathlib import Path
+
+          domain = os.environ["INFISICAL_DOMAIN"].rstrip("/")
+          identity_id = os.environ["IDENTITY_ID"]
+          env_slug = os.environ["ENV_SLUG"]
+          project_slug = os.environ["PROJECT_SLUG"]
+          secret_path = os.environ["SECRET_PATH"]
+          jwt = open(os.environ["JWT_FILE"], encoding="utf-8").read().strip()
+
+          b64 = jwt.split(".")[1]
           b64 += "=" * (-len(b64) % 4)
           payload = json.loads(base64.urlsafe_b64decode(b64))
           keys = ("sub", "aud", "iss", "repository", "ref", "environment", "workflow_ref", "job_workflow_ref")
-          out = {k: payload.get(k) for k in keys}
-          print("::notice title=OIDC claims for Infisical::Copy Subject (and Audiences) from this JSON into the machine identity OIDC Auth settings:")
-          print(json.dumps(out, indent=2))
-          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
-              fh.write(f"audience={os.environ['OIDC_AUDIENCE']}\n")
-          PY
+          claims = {k: payload.get(k) for k in keys}
+          print("::notice title=OIDC claims for Infisical::Set Subject and Audiences to these exact values:")
+          print(json.dumps(claims, indent=2))
 
-      - name: Fetch secrets from Infisical
-        uses: Infisical/secrets-action@v1.0.16
-        with:
-          method: oidc
-          domain: ${{ inputs.infisical_domain }}
-          identity-id: ${{ inputs.identity_id }}
-          oidc-audience: ${{ inputs.oidc_audience != '' && inputs.oidc_audience || format('https://github.com/{0}', github.repository_owner) }}
-          env-slug: ${{ inputs.env_slug }}
-          project-slug: ${{ inputs.project_slug }}
-          export-type: file
-          file-output-path: .env
+          login_body = urllib.parse.urlencode({"identityId": identity_id, "jwt": jwt}).encode()
+          login_req = urllib.request.Request(
+              f"{domain}/api/v1/auth/oidc-auth/login",
+              data=login_body,
+              method="POST",
+              headers={"Content-Type": "application/x-www-form-urlencoded"},
+          )
+          try:
+              with urllib.request.urlopen(login_req) as resp:
+                  login_json = json.load(resp)
+          except urllib.error.HTTPError as exc:
+              body = exc.read().decode(errors="replace")
+              print(f"::error::Infisical OIDC login failed ({exc.code}): {body}", file=sys.stderr)
+              print(
+                  "::error::In Infisical, set Subject to the sub value and Audiences to the aud value above (exact match; avoid globs on v0.158.x).",
+                  file=sys.stderr,
+              )
+              sys.exit(1)
+
+          token = login_json.get("accessToken")
+          if not token:
+              print(f"::error::No accessToken in response: {login_json}", file=sys.stderr)
+              sys.exit(1)
+
+          params = urllib.parse.urlencode(
+              {
+                  "secretPath": secret_path,
+                  "environment": env_slug,
+                  "workspaceSlug": project_slug,
+                  "include_imports": "true",
+                  "recursive": "false",
+                  "expandSecretReferences": "true",
+              }
+          )
+          secrets_req = urllib.request.Request(
+              f"{domain}/api/v3/secrets/raw?{params}",
+              headers={"Authorization": f"Bearer {token}"},
+          )
+          with urllib.request.urlopen(secrets_req) as resp:
+              secrets_json = json.load(resp)
+
+          values: dict[str, str] = {
+              s["secretKey"]: s["secretValue"] for s in secrets_json.get("secrets", [])
+          }
+          for imp in reversed(secrets_json.get("imports") or []):
+              for s in imp.get("secrets") or []:
+                  values.setdefault(s["secretKey"], s["secretValue"])
+
+          lines = []
+          for key, value in values.items():
+              escaped = value.replace("\\", "\\\\").replace("'", "\\'")
+              lines.append(f"{key}='{escaped}'")
+          Path(".env").write_text("\n".join(lines) + ("\n" if lines else ""), encoding="utf-8")
+          print(f"::notice::Infisical exported {len(lines)} secret(s) to .env")
+          PY
 
       - name: Verify .env was created
         run: |
           set -euo pipefail
           test -s .env
-          echo "::notice::Infisical exported $(wc -l < .env) line(s) to .env (keys only, not values)."
+          echo "::notice::Keys in .env:"
+          cut -d= -f1 .env
 
       - name: Upload .env artifact for caller workflows
         id: upload-env

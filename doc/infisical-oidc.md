@@ -46,11 +46,14 @@ Use one of these instead:
 
 `*` should match `:` and `/` in the subject (e.g. `repo:org/repo:ref:refs/heads/main`). **Infisical before the picomatch `bash: true` fix** (deployed here as `v0.158.0`) often rejects all `repo:…/*` globs — use an **exact** `sub` from the workflow log step **Log GitHub OIDC claims**, or upgrade `infisical_image_tag` (e.g. `v0.160.4` or newer).
 
-Example exact subject for `haproxy-rocky9` on `main` via workflow dispatch:
+Example exact values for `haproxy-rocky9` on `main` (copy from workflow log **OIDC claims for Infisical**):
 
-```text
-repo:infrastructure-alexson/haproxy-rocky9:ref:refs/heads/main
-```
+| Field | Value |
+|--------|--------|
+| **Subject** | `repo:infrastructure-alexson/haproxy-rocky9:ref:refs/heads/main` |
+| **Audiences** | `https://github.com/infrastructure-alexson` |
+
+Do not use globs for Subject/Audience on **v0.158.0** until Infisical is upgraded.
 
 ### Audiences
 
