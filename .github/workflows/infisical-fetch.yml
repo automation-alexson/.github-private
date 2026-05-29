@@ -3,13 +3,11 @@ name: Infisical Fetch
 
 on:
   workflow_call:
-    inputs:
-      env-name:
-        required: true
-        type: string # e.g., 'dev', 'prod'
-      project-id:
-        required: true
-        type: string
+
+env:
+  INFISICAL_IDENTITY_ID: '8977b274-e440-4612-9097-69faf3ecbe2a'
+  INFISICAL_ENV_SLUG: 'prod'
+  INFISICAL_SECRETS_PROJECT_ID: 'Secrets'
 
 jobs:
   fetch-and-run:
@@ -27,8 +25,10 @@ jobs:
       - name: Fetch Secrets from Infisical
         uses: Infisical/secrets-action@v1
         with:
-          client-id: ${{ vars.INFISICAL_IDENTITY_ID }}
-          env-slug: ${{ vars.INFISICAL_ENV_SLUG }}
-          project-id: ${{ vars.INFISICAL_SECRETS_PROJECT_ID }}
+          client-id: ${{ env.INFISICAL_IDENTITY_ID }}
+          env-slug: ${{ env.INFISICAL_ENV_SLUG }}
+          project-id: ${{ env.INFISICAL_SECRETS_PROJECT_ID }}
           # Specifying OIDC means no static client-secret is needed
-          auth-method: 'oidc' 
+          auth-method: 'oidc'
+          export-type: 'file'
+          file-path: '.env'
