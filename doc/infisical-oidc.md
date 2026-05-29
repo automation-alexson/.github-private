@@ -18,7 +18,7 @@ permissions:
 jobs:
   fetch-secrets:
     uses: infrastructure-alexson/.github-private/.github/workflows/infisical-fetch.yml@main
-    # optional overrides: project_slug, env_slug, identity_id, infisical_domain
+    # optional overrides: project_id (UUID), project_slug, env_slug, identity_id, infisical_domain
 ```
 
 No per-repo Subject configuration in YAML — binding is entirely in Infisical.
@@ -88,6 +88,7 @@ The reusable workflow sets `oidc-audience` to `https://github.com/<repository_ow
 1. Repository (or org) can use `.github-private` reusable workflows (**Actions access** on `.github-private`).
 2. Workflow has `permissions: id-token: write`.
 3. Self-hosted runner can reach `vault.svc.eh168.alexson.org` (if using default `infisical_domain`).
+4. **Project access:** machine identity added to the project; on Infisical **v0.160+** the workflow resolves `project_slug` via `/api/v1/projects/slug/...` then exports with `/api/v4/secrets/`. If slug lookup 404s, pass `project_id` (UUID from the project URL in the Infisical UI).
 
 ## Debug a failing repo
 

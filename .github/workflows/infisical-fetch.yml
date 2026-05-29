@@ -15,10 +15,15 @@ on:
         type: string
         default: prod
       project_slug:
-        description: Infisical project slug
+        description: Infisical project slug (used when project_id is empty)
         required: false
         type: string
         default: Secrets
+      project_id:
+        description: Infisical project UUID (from project URL; preferred on v0.160+)
+        required: false
+        type: string
+        default: ""
       identity_id:
         description: Machine identity ID (must have OIDC auth enabled in Infisical UI)
         required: false
@@ -63,6 +68,7 @@ jobs:
           IDENTITY_ID: ${{ inputs.identity_id }}
           ENV_SLUG: ${{ inputs.env_slug }}
           PROJECT_SLUG: ${{ inputs.project_slug }}
+          PROJECT_ID: ${{ inputs.project_id }}
           SECRET_PATH: ${{ inputs.secret_path }}
           OIDC_AUDIENCE: ${{ inputs.oidc_audience != '' && inputs.oidc_audience || format('https://github.com/{0}', github.repository_owner) }}
         run: |
@@ -81,6 +87,7 @@ jobs:
           identity_id = os.environ["IDENTITY_ID"]
           env_slug = os.environ["ENV_SLUG"]
           project_slug = os.environ["PROJECT_SLUG"]
+          project_id = os.environ.get("PROJECT_ID", "").strip()
           secret_path = os.environ["SECRET_PATH"]
           jwt = open(os.environ["JWT_FILE"], encoding="utf-8").read().strip()
 
@@ -123,22 +130,56 @@ jobs:
               print(f"::error::No accessToken in response: {login_json}", file=sys.stderr)
               sys.exit(1)
 
+          if not project_id:
+              slug_req = urllib.request.Request(
+                  f"{domain}/api/v1/projects/slug/{urllib.parse.quote(project_slug, safe='')}",
+                  headers={"Authorization": f"Bearer {token}"},
+              )
+              try:
+                  with urllib.request.urlopen(slug_req) as resp:
+                      project_json = json.load(resp)
+              except urllib.error.HTTPError as exc:
+                  body = exc.read().decode(errors="replace")
+                  print(
+                      f"::error::Could not resolve project slug '{project_slug}' ({exc.code}): {body}",
+                      file=sys.stderr,
+                  )
+                  print(
+                      "::error::Set workflow input project_id to the project UUID from Infisical (Project Settings or browser URL).",
+                      file=sys.stderr,
+                  )
+                  sys.exit(1)
+              project_id = project_json.get("id") or project_json.get("_id") or ""
+              if not project_id:
+                  print(f"::error::Project lookup returned no id: {project_json}", file=sys.stderr)
+                  sys.exit(1)
+              print(f"::notice::Resolved project slug '{project_slug}' -> {project_id}")
+
           params = urllib.parse.urlencode(
               {
                   "secretPath": secret_path,
                   "environment": env_slug,
-                  "workspaceSlug": project_slug,
-                  "include_imports": "true",
+                  "projectId": project_id,
+                  "includeImports": "true",
                   "recursive": "false",
                   "expandSecretReferences": "true",
               }
           )
           secrets_req = urllib.request.Request(
-              f"{domain}/api/v3/secrets/raw?{params}",
+              f"{domain}/api/v4/secrets/?{params}",
               headers={"Authorization": f"Bearer {token}"},
           )
-          with urllib.request.urlopen(secrets_req) as resp:
-              secrets_json = json.load(resp)
+          try:
+              with urllib.request.urlopen(secrets_req) as resp:
+                  secrets_json = json.load(resp)
+          except urllib.error.HTTPError as exc:
+              body = exc.read().decode(errors="replace")
+              print(f"::error::Infisical secrets export failed ({exc.code}): {body}", file=sys.stderr)
+              print(
+                  f"::error::Verify project_id, env_slug ({env_slug}), secret_path ({secret_path}), and machine identity access to the project.",
+                  file=sys.stderr,
+              )
+              sys.exit(1)
 
           values: dict[str, str] = {
               s["secretKey"]: s["secretValue"] for s in secrets_json.get("secrets", [])
