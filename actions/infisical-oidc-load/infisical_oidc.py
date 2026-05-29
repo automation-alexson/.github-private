@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fetch Infisical secrets via GitHub OIDC; export to GITHUB_ENV and/or a dotenv file."""
+"""Fetch Infisical secrets via GitHub OIDC and export to GITHUB_ENV."""
 
 from __future__ import annotations
 
@@ -44,19 +44,6 @@ def append_github_env(name: str, value: str) -> None:
     print(f"::add-mask::{value}")
 
 
-def dotenv_line(key: str, value: str) -> str:
-    if "\n" in value or "\r" in value or '"' in value:
-        escaped = (
-            value.replace("\\", "\\\\")
-            .replace('"', '\\"')
-            .replace("\r", "")
-            .replace("\n", "\\n")
-        )
-        return f'{key}="{escaped}"'
-    escaped = value.replace("\\", "\\\\").replace("'", "\\'")
-    return f"{key}='{escaped}'"
-
-
 def main() -> int:
     domain = os.environ["INFISICAL_DOMAIN"].rstrip("/")
     identity_id = os.environ["IDENTITY_ID"]
@@ -65,9 +52,6 @@ def main() -> int:
     project_id = os.environ.get("PROJECT_ID", "").strip()
     secret_path = os.environ["SECRET_PATH"]
     recursive = os.environ.get("RECURSIVE", "true").lower() in ("1", "true", "yes")
-    write_env_file = os.environ.get("WRITE_ENV_FILE", "false").lower() in ("1", "true", "yes")
-    write_github_env = os.environ.get("WRITE_GITHUB_ENV", "true").lower() in ("1", "true", "yes")
-    env_file_path = os.environ.get("ENV_FILE_PATH", ".env")
     jwt_path = os.environ["JWT_FILE"]
 
     jwt = Path(jwt_path).read_text(encoding="utf-8").strip()
@@ -171,15 +155,9 @@ def main() -> int:
 
     print(f"::notice::Secret keys: {', '.join(sorted(values.keys()))}")
 
-    if write_github_env:
-        for key, value in values.items():
-            append_github_env(env_name_for_secret(key), value)
-        print(f"::notice::Loaded {len(values)} secret(s) into job environment variables")
-
-    if write_env_file:
-        lines = [dotenv_line(k, v) for k, v in values.items()]
-        Path(env_file_path).write_text("\n".join(lines) + "\n", encoding="utf-8")
-        print(f"::notice::Wrote {len(lines)} secret(s) to {env_file_path}")
+    for key, value in values.items():
+        append_github_env(env_name_for_secret(key), value)
+    print(f"::notice::Loaded {len(values)} secret(s) into job environment variables")
 
     return 0
 

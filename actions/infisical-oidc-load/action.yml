@@ -1,5 +1,5 @@
 name: Infisical OIDC load secrets
-description: Authenticate with Infisical via GitHub OIDC and load secrets into GITHUB_ENV (optional .env file).
+description: Authenticate with Infisical via GitHub OIDC and load secrets into GITHUB_ENV (masked).
 
 inputs:
   infisical_domain:
@@ -34,18 +34,6 @@ inputs:
     description: Include secrets in subfolders
     required: false
     default: "true"
-  write_github_env:
-    description: Export secrets as job environment variables (masked in logs)
-    required: false
-    default: "true"
-  write_env_file:
-    description: Also write a dotenv file (for reusable workflow artifacts)
-    required: false
-    default: "false"
-  env_file_path:
-    description: Path for dotenv output when write_env_file is true
-    required: false
-    default: .env
 
 runs:
   using: composite
@@ -60,9 +48,6 @@ runs:
         PROJECT_ID: ${{ inputs.project_id }}
         SECRET_PATH: ${{ inputs.secret_path }}
         RECURSIVE: ${{ inputs.recursive }}
-        WRITE_GITHUB_ENV: ${{ inputs.write_github_env }}
-        WRITE_ENV_FILE: ${{ inputs.write_env_file }}
-        ENV_FILE_PATH: ${{ inputs.env_file_path }}
         OIDC_AUDIENCE: ${{ inputs.oidc_audience != '' && inputs.oidc_audience || format('https://github.com/{0}', github.repository_owner) }}
       run: |
         set -euo pipefail

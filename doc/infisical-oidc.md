@@ -1,8 +1,12 @@
 # Infisical OIDC for GitHub Actions (multi-org)
 
-Reusable workflow: [`.github/workflows/infisical-fetch.yml`](../.github/workflows/infisical-fetch.yml)
+Composite action: [`actions/infisical-oidc-load`](../actions/infisical-oidc-load)
 
 Self-hosted Infisical: `https://vault.svc.eh168.alexson.org`
+
+Secrets are loaded into **`GITHUB_ENV`** in the **same job** (values are masked in logs). There is no `.env` file or artifact export.
+
+> **Note:** `GITHUB_ENV` does not carry across jobs. Call `infisical-oidc-load` in the job that runs your playbook or deploy steps—not in a separate `fetch-secrets` job.
 
 ## One identity for all repos
 
@@ -17,9 +21,7 @@ Use a **single** organization machine identity with **OIDC Auth** (not Universal
 
 Without this step you get `ProjectMembershipNotFound` / “not a member of this project” (403).
 
-### Load secrets in the same job (recommended)
-
-Use the composite action [`actions/infisical-oidc-load`](../actions/infisical-oidc-load). Secrets become **job environment variables** (values are masked in logs).
+## Usage
 
 ```yaml
 permissions:
@@ -34,19 +36,10 @@ jobs:
         with:
           secret_path: /
           recursive: "true"
-          write_github_env: "true"
-          write_env_file: "false"
       # ANSIBLE_SSH_PRIVATE_KEY, HAPROXY_STATS_PASSWORD, etc. are available in later steps
 ```
 
 Known Infisical keys are mapped to stable env names (e.g. `ansible-ssh-private-key` → `ANSIBLE_SSH_PRIVATE_KEY`). Other keys are uppercased with non-alphanumeric characters replaced by `_`.
-
-### Legacy: `.env` artifact (other repos)
-
-```yaml
-  fetch-secrets:
-    uses: infrastructure-alexson/.github-private/.github/workflows/infisical-fetch.yml@main
-```
 
 No per-repo Subject configuration in YAML — binding is entirely in Infisical.
 
@@ -97,31 +90,24 @@ Or two **separate** rows (not comma-separated in one field):
 
 Infisical supports [glob patterns](https://infisical.com/docs/documentation/platform/identities/oidc-auth/general).
 
-Tighter examples (if you want less scope later):
-
-| Pattern | Allows |
-|---------|--------|
-| `repo:infrastructure-alexson/*:ref:refs/heads/*` | Only branch refs in that org |
-| `repo:general-alexson/my-app:*` | One repo only |
-
 ## Audiences vs workflow
 
 GitHub sets the JWT `aud` claim to the **repository owner** org URL by default (`https://github.com/<owner>`). Repos under `general-alexson` send a different `aud` than `infrastructure-alexson` repos — list **both** in Infisical Audiences.
 
-The reusable workflow sets `oidc-audience` to `https://github.com/<repository_owner>` automatically.
+The action requests the OIDC token with audience `https://github.com/<repository_owner>` by default (`oidc_audience` input overrides).
 
 ## Caller requirements
 
-1. Repository (or org) can use `.github-private` reusable workflows (**Actions access** on `.github-private`).
+1. Repository can use actions from **`.github-private`** (**Settings → Actions → General → Access**).
 2. Workflow has `permissions: id-token: write`.
 3. Self-hosted runner can reach `vault.svc.eh168.alexson.org` (if using default `infisical_domain`).
-4. **Project access:** machine identity added to the project; on Infisical **v0.160+** the workflow resolves `project_slug` via `/api/v1/projects/slug/...` then exports with `/api/v4/secrets/`. If slug lookup 404s, pass `project_id` (UUID from the project URL in the Infisical UI).
-5. **Secrets path / environment:** default export uses `env_slug: prod`, `secret_path: /`, `recursive: true` (includes folders like `/Ansible`). If you see `exported 0 secret(s)`, verify the environment slug in Infisical matches `prod` and secrets exist there (e.g. `Ansible/ansible-ssh-private-key`).
+4. **Project access:** machine identity added to the project; the action resolves `project_slug` via `/api/v1/projects/slug/...` then reads secrets with `/api/v4/secrets/`. Pass `project_id` (UUID) to skip slug lookup.
+5. **Secrets path / environment:** defaults are `env_slug: prod`, `secret_path: /`, `recursive: true`. If zero secrets load, verify the environment slug and that secrets exist (e.g. under `/Ansible`).
 
-## Debug a failing repo
+## Debug a failing run
 
-Re-run the workflow; the **Fetch secrets from Infisical via OIDC** step prints **OIDC claims for Infisical** (`sub`, `aud`, …) before login. Match those values in the machine identity, or widen globs after v0.160.7.
+Re-run the workflow; the **Fetch secrets from Infisical** step prints **OIDC claims for Infisical** (`sub`, `aud`, …) before login. Match those values in the machine identity, or widen globs after v0.160.7.
 
 ### GitHub org OIDC customization
 
-If **Organization → Settings → Actions → OIDC** (or per-repo OIDC customization) changes the default `sub` format, simple `repo:org/repo:*` globs will not match. Either reset to the default subject template or set Infisical **Subject** from the exact `sub` printed by `debug_oidc: true`.
+If **Organization → Settings → Actions → OIDC** changes the default `sub` format, simple `repo:org/repo:*` globs will not match. Reset to the default subject template or set Infisical **Subject** from the exact `sub` printed in the log.
