@@ -17,7 +17,9 @@ Use a **single** organization machine identity with **OIDC Auth** (not Universal
 
 Without this step you get `ProjectMembershipNotFound` / “not a member of this project” (403).
 
-Callers only need:
+### Load secrets in the same job (recommended)
+
+Use the composite action [`actions/infisical-oidc-load`](../actions/infisical-oidc-load). Secrets become **job environment variables** (values are masked in logs).
 
 ```yaml
 permissions:
@@ -25,9 +27,25 @@ permissions:
   contents: read
 
 jobs:
+  deploy:
+    steps:
+      - uses: actions/checkout@v4
+      - uses: infrastructure-alexson/.github-private/actions/infisical-oidc-load@main
+        with:
+          secret_path: /
+          recursive: "true"
+          write_github_env: "true"
+          write_env_file: "false"
+      # ANSIBLE_SSH_PRIVATE_KEY, HAPROXY_STATS_PASSWORD, etc. are available in later steps
+```
+
+Known Infisical keys are mapped to stable env names (e.g. `ansible-ssh-private-key` → `ANSIBLE_SSH_PRIVATE_KEY`). Other keys are uppercased with non-alphanumeric characters replaced by `_`.
+
+### Legacy: `.env` artifact (other repos)
+
+```yaml
   fetch-secrets:
     uses: infrastructure-alexson/.github-private/.github/workflows/infisical-fetch.yml@main
-    # optional overrides: project_id (UUID), project_slug, env_slug, identity_id, infisical_domain
 ```
 
 No per-repo Subject configuration in YAML — binding is entirely in Infisical.
