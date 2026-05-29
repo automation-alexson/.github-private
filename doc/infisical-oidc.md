@@ -34,6 +34,17 @@ No per-repo Subject configuration in YAML — binding is entirely in Infisical.
 
 Requires **Infisical v0.160.4+** (`infisical_image_tag: v0.160.7` in `infisical-microk8s`) so `*` matches `/` in GitHub `sub` claims. On **v0.158.x**, globs fail — use exact `sub`/`aud` from the workflow log until upgraded.
 
+### Error messages (v0.160.x)
+
+| API message | Infisical field to fix |
+|-------------|-------------------------|
+| `OIDC subject not allowed` | **Subject** |
+| `OIDC audience not allowed` | **Audiences** |
+| `OIDC claim not allowed` | **Claims** (additional JWT fields — clear this section if you only use Subject/Audience) |
+| `token has no <field> field` | **Claims** or **Claim metadata mapping** references a claim not in the token |
+
+For GitHub Actions, leave **Claims** and **Claim metadata mapping** empty unless you intentionally restrict on `repository`, `ref`, `workflow_ref`, etc.
+
 ### Subject
 
 | Subject pattern | Use when |
