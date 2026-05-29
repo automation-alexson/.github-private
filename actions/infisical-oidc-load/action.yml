@@ -50,6 +50,7 @@ runs:
         RECURSIVE: ${{ inputs.recursive }}
         OIDC_AUDIENCE: ${{ inputs.oidc_audience != '' && inputs.oidc_audience || format('https://github.com/{0}', github.repository_owner) }}
       run: |
+        set +x
         set -euo pipefail
         JWT_FILE="${RUNNER_TEMP}/github-oidc.jwt"
         export JWT_FILE

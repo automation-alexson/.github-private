@@ -21,6 +21,21 @@ ENV_ALIASES: dict[str, str] = {
     "ansible_inventory": "ANSIBLE_INVENTORY",
 }
 
+# Keys stripped or redacted before any log/error output
+_SENSITIVE_JSON_KEYS = frozenset(
+    {
+        "accessToken",
+        "access_token",
+        "secretValue",
+        "secret_value",
+        "token",
+        "password",
+        "privateKey",
+        "private_key",
+        "value",
+    }
+)
+
 
 def env_name_for_secret(key: str) -> str:
     if key in ENV_ALIASES:
@@ -31,17 +46,55 @@ def env_name_for_secret(key: str) -> str:
     return normalized
 
 
+def _redact_for_log(obj: object) -> object:
+    if isinstance(obj, dict):
+        return {
+            k: "***" if k in _SENSITIVE_JSON_KEYS else _redact_for_log(v)
+            for k, v in obj.items()
+        }
+    if isinstance(obj, list):
+        return [_redact_for_log(item) for item in obj]
+    return obj
+
+
+def _safe_json_for_log(obj: object) -> str:
+    return json.dumps(_redact_for_log(obj))
+
+
+def _safe_error_body(body: str, *, max_len: int = 500) -> str:
+    text = body.strip()
+    if not text:
+        return "(empty)"
+    try:
+        return _safe_json_for_log(json.loads(text))
+    except json.JSONDecodeError:
+        if len(text) > max_len:
+            return text[:max_len] + "…"
+        return text
+
+
+def register_masks(value: str) -> None:
+    """Register GitHub log masks without echoing secret values elsewhere."""
+    if not value:
+        return
+    print(f"::add-mask::{value}")
+    if "\n" in value:
+        for line in value.splitlines():
+            if line:
+                print(f"::add-mask::{line}")
+
+
 def append_github_env(name: str, value: str) -> None:
     path = os.environ.get("GITHUB_ENV")
     if not path:
         return
+    register_masks(value)
     with open(path, "a", encoding="utf-8") as fh:
         if "\n" in value or "\r" in value:
             fh.write(f"{name}<<EOF\n{value.rstrip(chr(10))}\nEOF\n")
         else:
             escaped = value.replace("%", "%25").replace("\r", "").replace("\n", "%0A")
             fh.write(f"{name}={escaped}\n")
-    print(f"::add-mask::{value}")
 
 
 def main() -> int:
@@ -75,7 +128,10 @@ def main() -> int:
             login_json = json.load(resp)
     except urllib.error.HTTPError as exc:
         body = exc.read().decode(errors="replace")
-        print(f"::error::Infisical OIDC login failed ({exc.code}): {body}", file=sys.stderr)
+        print(
+            f"::error::Infisical OIDC login failed ({exc.code}): {_safe_error_body(body)}",
+            file=sys.stderr,
+        )
         hint = "Check Subject and Audiences against sub/aud above."
         if "claim not allowed" in body.lower():
             hint = (
@@ -91,8 +147,12 @@ def main() -> int:
 
     token = login_json.get("accessToken")
     if not token:
-        print(f"::error::No accessToken in response: {login_json}", file=sys.stderr)
+        print(
+            f"::error::No accessToken in OIDC login response (keys: {', '.join(sorted(login_json.keys()))})",
+            file=sys.stderr,
+        )
         return 1
+    register_masks(token)
 
     if not project_id:
         slug_req = urllib.request.Request(
@@ -104,7 +164,10 @@ def main() -> int:
                 project_json = json.load(resp)
         except urllib.error.HTTPError as exc:
             body = exc.read().decode(errors="replace")
-            print(f"::error::Project '{project_slug}' lookup failed ({exc.code}): {body}", file=sys.stderr)
+            print(
+                f"::error::Project '{project_slug}' lookup failed ({exc.code}): {_safe_error_body(body)}",
+                file=sys.stderr,
+            )
             if "ProjectMembershipNotFound" in body or "not a member of this project" in body:
                 print(
                     "::error::Add the machine identity under Project → Settings → Access Control → Machine Identities.",
@@ -113,7 +176,10 @@ def main() -> int:
             return 1
         project_id = project_json.get("id") or project_json.get("_id") or ""
         if not project_id:
-            print(f"::error::Project lookup returned no id: {project_json}", file=sys.stderr)
+            print(
+                f"::error::Project lookup returned no id (keys: {', '.join(sorted(project_json.keys()))})",
+                file=sys.stderr,
+            )
             return 1
         print(f"::notice::Resolved project slug '{project_slug}' -> {project_id}")
 
@@ -137,7 +203,10 @@ def main() -> int:
             secrets_json = json.load(resp)
     except urllib.error.HTTPError as exc:
         body = exc.read().decode(errors="replace")
-        print(f"::error::Infisical secrets export failed ({exc.code}): {body}", file=sys.stderr)
+        print(
+            f"::error::Infisical secrets export failed ({exc.code}): {_safe_error_body(body)}",
+            file=sys.stderr,
+        )
         return 1
 
     values: dict[str, str] = {s["secretKey"]: s["secretValue"] for s in secrets_json.get("secrets", [])}
@@ -155,9 +224,15 @@ def main() -> int:
 
     print(f"::notice::Secret keys: {', '.join(sorted(values.keys()))}")
 
+    loaded_env_names: list[str] = []
     for key, value in values.items():
-        append_github_env(env_name_for_secret(key), value)
-    print(f"::notice::Loaded {len(values)} secret(s) into job environment variables")
+        env_name = env_name_for_secret(key)
+        append_github_env(env_name, value)
+        loaded_env_names.append(env_name)
+    print(
+        f"::notice::Loaded {len(values)} secret(s) into job environment: "
+        f"{', '.join(sorted(loaded_env_names))}"
+    )
 
     return 0
 

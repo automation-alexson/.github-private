@@ -6,6 +6,8 @@ Self-hosted Infisical: `https://vault.svc.eh168.alexson.org`
 
 Secrets are loaded into **`GITHUB_ENV`** in the **same job** (values are masked in logs). There is no `.env` file or artifact export.
 
+The action never logs secret **values**—only Infisical key names, target env var names, and OIDC claims (`sub`, `aud`, …) for debugging. API error bodies are redacted; multiline values get per-line `::add-mask::` registration.
+
 > **Note:** `GITHUB_ENV` does not carry across jobs. Call `infisical-oidc-load` in the job that runs your playbook or deploy steps—not in a separate `fetch-secrets` job.
 
 ## One identity for all repos
