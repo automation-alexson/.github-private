@@ -141,13 +141,21 @@ jobs:
               except urllib.error.HTTPError as exc:
                   body = exc.read().decode(errors="replace")
                   print(
-                      f"::error::Could not resolve project slug '{project_slug}' ({exc.code}): {body}",
+                      f"::error::Project '{project_slug}' lookup failed ({exc.code}): {body}",
                       file=sys.stderr,
                   )
-                  print(
-                      "::error::Set workflow input project_id to the project UUID from Infisical (Project Settings or browser URL).",
-                      file=sys.stderr,
-                  )
+                  if "ProjectMembershipNotFound" in body or "not a member of this project" in body:
+                      print(
+                          "::error::Add this machine identity to the project: "
+                          "Project secrets-vi-5-a → Settings → Access Control → Machine Identities → Add identity "
+                          f"({identity_id}) with a role that can read secrets in {env_slug}.",
+                          file=sys.stderr,
+                      )
+                  else:
+                      print(
+                          "::error::Check project_slug or pass project_id from the Infisical project URL.",
+                          file=sys.stderr,
+                      )
                   sys.exit(1)
               project_id = project_json.get("id") or project_json.get("_id") or ""
               if not project_id:

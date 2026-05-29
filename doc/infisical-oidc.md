@@ -6,7 +6,16 @@ Self-hosted Infisical: `https://vault.svc.eh168.alexson.org`
 
 ## One identity for all repos
 
-Use a **single** organization machine identity with **OIDC Auth** (not Universal Auth). Add it to each Infisical project it should read (e.g. project slug `secrets-vi-5-a`, environment `prod`).
+Use a **single** organization machine identity with **OIDC Auth** (not Universal Auth).
+
+**Project membership (required):** OIDC only authenticates the identity at org level. You must also add that identity to each project:
+
+1. Open project **`secrets-vi-5-a`** in Infisical.
+2. **Project Settings → Access Control → Machine Identities → Add identity**.
+3. Select identity `8977b274-e440-4612-9097-69faf3ecbe2a` (or your GitHub OIDC identity).
+4. Assign a project role that can **read secrets** in **`prod`**.
+
+Without this step you get `ProjectMembershipNotFound` / “not a member of this project” (403).
 
 Callers only need:
 
