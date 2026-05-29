@@ -219,11 +219,21 @@ jobs:
 
           print(f"::notice::Secret keys: {', '.join(sorted(values.keys()))}")
 
-          lines = []
-          for key, value in values.items():
+          def dotenv_line(key: str, value: str) -> str:
+              # Multiline values (SSH keys) must use double quotes so python-dotenv parses \\n correctly.
+              if "\n" in value or "\r" in value or '"' in value:
+                  escaped = (
+                      value.replace("\\", "\\\\")
+                      .replace('"', '\\"')
+                      .replace("\r", "")
+                      .replace("\n", "\\n")
+                  )
+                  return f'{key}="{escaped}"'
               escaped = value.replace("\\", "\\\\").replace("'", "\\'")
-              lines.append(f"{key}='{escaped}'")
-          Path(".env").write_text("\n".join(lines) + ("\n" if lines else ""), encoding="utf-8")
+              return f"{key}='{escaped}'"
+
+          lines = [dotenv_line(k, v) for k, v in values.items()]
+          Path(".env").write_text("\n".join(lines) + "\n", encoding="utf-8")
           print(f"::notice::Infisical exported {len(lines)} secret(s) to .env")
           PY
 
@@ -231,8 +241,8 @@ jobs:
         run: |
           set -euo pipefail
           test -s .env
-          echo "::notice::Keys in .env:"
-          cut -d= -f1 .env
+          pip install -q python-dotenv
+          python3 -c "from dotenv import dotenv_values; keys=sorted(dotenv_values('.env')); print('::notice::Keys in .env: ' + ', '.join(keys))"
 
       - name: Upload .env artifact for caller workflows
         id: upload-env
