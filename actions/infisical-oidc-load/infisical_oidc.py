@@ -82,14 +82,15 @@ def _safe_error_body(body: str, *, max_len: int = 500) -> str:
 
 
 def register_masks(value: str) -> None:
-    """Register GitHub log masks without echoing secret values elsewhere."""
+    """Register GitHub log masks. Each line is a separate workflow command (multiline-safe)."""
     if not value:
         return
-    print(f"::add-mask::{value}")
-    if "\n" in value:
-        for line in value.splitlines():
-            if line:
-                print(f"::add-mask::{line}")
+    # A single ::add-mask:: line must not contain newlines; otherwise GitHub logs the rest verbatim.
+    lines = value.splitlines() if "\n" in value or "\r" in value else [value]
+    for line in lines:
+        if line:
+            sys.stdout.write(f"::add-mask::{line}\n")
+    sys.stdout.flush()
 
 
 def append_github_env(name: str, value: str) -> None:
