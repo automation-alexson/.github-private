@@ -36,9 +36,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: infrastructure-alexson/.github-private/actions/infisical-oidc-load@main
         with:
-          secret_path: /
-          recursive: "true"
-      # ANSIBLE_SSH_PRIVATE_KEY, HAPROXY_STATS_PASSWORD, etc. are available in later steps
+          secret_path: /Ansible
+          recursive: "false"
+          secret_keys: ansible-ssh-private-key
+      # ANSIBLE_SSH_PRIVATE_KEY, etc. are available in later steps
 ```
 
 Known Infisical keys are mapped to stable env names (e.g. `ansible-ssh-private-key` → `ANSIBLE_SSH_PRIVATE_KEY`). Other keys are uppercased with non-alphanumeric characters replaced by `_`.
@@ -104,7 +105,7 @@ The action requests the OIDC token with audience `https://github.com/<repository
 2. Workflow has `permissions: id-token: write`.
 3. Self-hosted runner can reach `vault.svc.eh168.alexson.org` (if using default `infisical_domain`).
 4. **Project access:** machine identity added to the project; the action resolves `project_slug` via `/api/v1/projects/slug/...` then reads secrets with `/api/v4/secrets/`. Pass `project_id` (UUID) to skip slug lookup.
-5. **Secrets path / environment:** defaults are `env_slug: prod`, `secret_path: /`, `recursive: true`. If zero secrets load, verify the environment slug and that secrets exist (e.g. under `/Ansible`).
+5. **Secrets path / environment:** defaults are `env_slug: prod`, `secret_path: /`, `recursive: true`. Use `secret_keys` (comma-separated) to load only specific Infisical keys. If zero secrets load, verify the environment slug, folder path, and key names (e.g. `ansible-ssh-private-key` under `/Ansible`).
 
 ## Debug a failing run
 

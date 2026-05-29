@@ -37,6 +37,14 @@ _SENSITIVE_JSON_KEYS = frozenset(
 )
 
 
+def parse_secret_keys(raw: str) -> frozenset[str] | None:
+    text = raw.strip()
+    if not text:
+        return None
+    keys = {k.strip() for k in re.split(r"[\s,]+", text) if k.strip()}
+    return frozenset(keys) if keys else None
+
+
 def env_name_for_secret(key: str) -> str:
     if key in ENV_ALIASES:
         return ENV_ALIASES[key]
@@ -105,6 +113,7 @@ def main() -> int:
     project_id = os.environ.get("PROJECT_ID", "").strip()
     secret_path = os.environ["SECRET_PATH"]
     recursive = os.environ.get("RECURSIVE", "true").lower() in ("1", "true", "yes")
+    secret_keys = parse_secret_keys(os.environ.get("SECRET_KEYS", ""))
     jwt_path = os.environ["JWT_FILE"]
 
     jwt = Path(jwt_path).read_text(encoding="utf-8").strip()
@@ -214,7 +223,23 @@ def main() -> int:
         for s in imp.get("secrets") or []:
             values.setdefault(s["secretKey"], s["secretValue"])
 
-    if not values:
+    if secret_keys is not None:
+        missing = secret_keys - values.keys()
+        values = {k: v for k, v in values.items() if k in secret_keys}
+        if missing:
+            print(
+                f"::warning::Requested secret key(s) not found at secretPath={secret_path}: "
+                f"{', '.join(sorted(missing))}",
+            )
+        if not values:
+            print(
+                f"::error::No matching secrets for secret_keys={', '.join(sorted(secret_keys))} "
+                f"at project={project_id} environment={env_slug} secretPath={secret_path} "
+                f"recursive={recursive}.",
+                file=sys.stderr,
+            )
+            return 1
+    elif not values:
         print(
             f"::error::No secrets returned for project={project_id} environment={env_slug} "
             f"secretPath={secret_path} recursive={recursive}.",

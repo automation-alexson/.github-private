@@ -34,6 +34,10 @@ inputs:
     description: Include secrets in subfolders
     required: false
     default: "true"
+  secret_keys:
+    description: Comma-separated Infisical secret keys to load (empty = all keys at secret_path)
+    required: false
+    default: ""
 
 runs:
   using: composite
@@ -48,6 +52,7 @@ runs:
         PROJECT_ID: ${{ inputs.project_id }}
         SECRET_PATH: ${{ inputs.secret_path }}
         RECURSIVE: ${{ inputs.recursive }}
+        SECRET_KEYS: ${{ inputs.secret_keys }}
         OIDC_AUDIENCE: ${{ inputs.oidc_audience != '' && inputs.oidc_audience || format('https://github.com/{0}', github.repository_owner) }}
       run: |
         set +x
