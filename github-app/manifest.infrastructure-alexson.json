@@ -1,5 +1,5 @@
 {
-  "name": "Alexson Automation (infrastructure)",
+  "name": "automation-alexson",
   "description": "Cross-repo read for infrastructure-alexson Ansible and GitHub Actions workflows.",
   "url": "https://github.com/infrastructure-alexson",
   "hook_attributes": {

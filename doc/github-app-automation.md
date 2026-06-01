@@ -2,7 +2,7 @@
 
 Use a **GitHub App** instead of long-lived PATs when workflows in one repo must clone or read private repos in the same org (or another org after install).
 
-Register **one app per organization** (`infrastructure-alexson` and `general-alexson` are separate registrations). Reuse the same name and permissions on both.
+Register **one app per organization** (`infrastructure-alexson` and `general-alexson` are separate registrations). Use the same name **`automation-alexson`** and permissions on both (separate App IDs per org).
 
 ## Architecture
 
@@ -47,7 +47,7 @@ Suggested settings:
 
 | Field | Value |
 |-------|--------|
-| Name | `Alexson Automation` |
+| Name | `automation-alexson` |
 | Homepage | `https://github.com/<org>` |
 | Webhook | Disabled |
 | Repository permissions → Contents | Read-only |
