@@ -1,0 +1,15 @@
+{
+  "name": "automation-alexson",
+  "description": "Cross-org read for Alexson GitHub Actions and Ansible workflows. Registered in automation-alexson; installed on infrastructure-alexson and general-alexson.",
+  "url": "https://github.com/automation-alexson",
+  "hook_attributes": {
+    "active": false
+  },
+  "redirect_url": "https://github.com/organizations/automation-alexson/settings/apps",
+  "public": true,
+  "default_permissions": {
+    "contents": "read",
+    "metadata": "read"
+  },
+  "default_events": []
+}

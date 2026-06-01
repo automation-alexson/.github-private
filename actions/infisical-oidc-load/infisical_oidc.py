@@ -19,6 +19,8 @@ ENV_ALIASES: dict[str, str] = {
     "haproxy_stats_password": "HAPROXY_STATS_PASSWORD",
     "haproxy_stats_user": "HAPROXY_STATS_USER",
     "ansible_inventory": "ANSIBLE_INVENTORY",
+    "github-app-id": "AUTOMATION_GITHUB_APP_ID",
+    "github-app-private-key": "AUTOMATION_GITHUB_APP_PRIVATE_KEY",
 }
 
 # Keys stripped or redacted before any log/error output
