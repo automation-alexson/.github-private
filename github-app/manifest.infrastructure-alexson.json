@@ -1,0 +1,15 @@
+{
+  "name": "Alexson Automation (infrastructure)",
+  "description": "Cross-repo read for infrastructure-alexson Ansible and GitHub Actions workflows.",
+  "url": "https://github.com/infrastructure-alexson",
+  "hook_attributes": {
+    "active": false
+  },
+  "redirect_url": "https://github.com/organizations/infrastructure-alexson/settings/apps",
+  "public": false,
+  "default_permissions": {
+    "contents": "read",
+    "metadata": "read"
+  },
+  "default_events": []
+}

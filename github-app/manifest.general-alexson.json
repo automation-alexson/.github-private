@@ -1,0 +1,15 @@
+{
+  "name": "Alexson Automation (general)",
+  "description": "Cross-repo read for general-alexson Ansible and GitHub Actions workflows.",
+  "url": "https://github.com/general-alexson",
+  "hook_attributes": {
+    "active": false
+  },
+  "redirect_url": "https://github.com/organizations/general-alexson/settings/apps",
+  "public": false,
+  "default_permissions": {
+    "contents": "read",
+    "metadata": "read"
+  },
+  "default_events": []
+}
