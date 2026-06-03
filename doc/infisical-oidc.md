@@ -1,5 +1,7 @@
 # Infisical OIDC for GitHub Actions (multi-org)
 
+Hosted in **`automation-alexson/.github-private`** (shared across `infrastructure-alexson`, `general-alexson`, and other orgs).
+
 Composite action: [`actions/infisical-oidc-load`](../actions/infisical-oidc-load)
 
 Self-hosted Infisical: `https://vault.svc.eh168.alexson.org`
@@ -34,7 +36,7 @@ jobs:
   deploy:
     steps:
       - uses: actions/checkout@v4
-      - uses: infrastructure-alexson/.github-private/actions/infisical-oidc-load@main
+      - uses: automation-alexson/.github-private/actions/infisical-oidc-load@main
         with:
           secret_path: /Ansible
           recursive: "false"
@@ -103,7 +105,7 @@ The action requests the OIDC token with audience `https://github.com/<repository
 
 ## Caller requirements
 
-1. Repository can use actions from **`.github-private`** (**Settings → Actions → General → Access**).
+1. **`automation-alexson/.github-private`** grants workflow access (**Settings → Actions → General → Access** → enterprise-wide or per consuming org). Each **consumer org** must allow actions from **`automation-alexson`** (**Organization → Settings → Actions → General**).
 2. Workflow has `permissions: id-token: write`.
 3. Self-hosted runner can reach `vault.svc.eh168.alexson.org` (if using default `infisical_domain`).
 4. **Project access:** machine identity added to the project; the action resolves `project_slug` via `/api/v1/projects/slug/...` then reads secrets with `/api/v4/secrets/`. Pass `project_id` (UUID) to skip slug lookup.

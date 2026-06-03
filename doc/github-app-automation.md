@@ -233,7 +233,7 @@ permissions:
 
 steps:
 
-  - uses: infrastructure-alexson/.github-private/actions/github-app-token@v1.1.0
+  - uses: automation-alexson/.github-private/actions/github-app-token@v1.1.0
 
     id: gh-app
 
@@ -273,7 +273,7 @@ steps:
 
 
 
-The app token applies to **`actions/checkout`** steps you pass it to. It does **not** replace GitHub’s resolution of `uses: org/repo/action@ref` — keep **Settings → Actions → Access** on `.github-private` for shared composite actions, or checkout `.github-private` with the app token and use `uses: ./local-path`.
+The app token applies to **`actions/checkout`** steps you pass it to. It does **not** replace GitHub’s resolution of `uses: org/repo/action@ref` — keep **Settings → Actions → Access** on **`automation-alexson/.github-private`** for shared composite actions, or checkout that repo with the app token and use `uses: ./local-path`.
 
 
 

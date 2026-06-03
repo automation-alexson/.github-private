@@ -1,12 +1,14 @@
-# ⚡ Welcome Team!
+# automation-alexson/.github-private
 
-> [**Wiki / Docs**](url) &nbsp;|&nbsp; [**Issue Tracker**](url) &nbsp;|&nbsp; [**CI/CD Dashboards**](url) &nbsp;|&nbsp; [**Onboarding Guide**](url)
+Shared **composite GitHub Actions** and docs for Alexson orgs (`infrastructure-alexson`, `general-alexson`, etc.).
 
----
+| Action | Purpose |
+|--------|---------|
+| [`infisical-oidc-load`](../actions/infisical-oidc-load) | Infisical secrets via GitHub OIDC |
+| [`ansible-ssh-cert-prep`](../actions/ansible-ssh-cert-prep) | Issue short-lived SSH user certificates for Ansible |
+| [`ansible-ssh-cert-cleanup`](../actions/ansible-ssh-cert-cleanup) | Remove cert key material after the job |
+| [`github-app-token`](../actions/github-app-token) | Mint installation tokens for cross-repo checkout |
 
-### 🚨 Production Status & Alerts
-* **Current Status:** 🟢 All systems operational.
-* **Deployment Policy:** No production merges after **3:00 PM on Fridays**.
-* **On-Call Engineer:** Check the active roster on [PagerDuty](url).
+Docs: [`doc/infisical-oidc.md`](../doc/infisical-oidc.md) · [`doc/ansible-ci-ssh-key.md`](../doc/ansible-ci-ssh-key.md) · [`doc/github-app-automation.md`](../doc/github-app-automation.md)
 
-*Search the repository list below to find specific projects or services.*
+**Usage:** `uses: automation-alexson/.github-private/actions/<name>@v1`

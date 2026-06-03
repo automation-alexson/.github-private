@@ -15,7 +15,7 @@ steps:
   - uses: actions/checkout@v5
 
   - name: Prepare Ansible SSH user certificate
-    uses: infrastructure-alexson/.github-private/actions/ansible-ssh-cert-prep@v1
+    uses: automation-alexson/.github-private/actions/ansible-ssh-cert-prep@v1
     with:
       signing_project_id: fca9f329-3988-40f8-a695-89fde921fc4d
       principal: automation
@@ -35,7 +35,7 @@ steps:
 
   - name: Remove Ansible SSH cert and key files
     if: always()
-    uses: infrastructure-alexson/.github-private/actions/ansible-ssh-cert-cleanup@v1
+    uses: automation-alexson/.github-private/actions/ansible-ssh-cert-cleanup@v1
 ```
 
 Fleet VMs must trust the CA (`infrastructure-alexson/ssh-ca-trust` **Deploy SSH CA trust** workflow) and allow principal `automation` via `AuthorizedPrincipalsFile`.
@@ -63,7 +63,7 @@ See [ssh-ca-trust doc/infisical-secrets.md](https://github.com/infrastructure-al
 Use when fleet trust is not yet deployed. Load only `/Ansible/ansible-ssh-private-key`:
 
 ```yaml
-- uses: infrastructure-alexson/.github-private/actions/infisical-oidc-load@v1
+- uses: automation-alexson/.github-private/actions/infisical-oidc-load@v1
   with:
     secret_path: /Ansible
     recursive: "false"
@@ -129,7 +129,7 @@ With certificates:
 ```yaml
 - name: Remove Ansible SSH cert and key files
   if: always()
-  uses: infrastructure-alexson/.github-private/actions/ansible-ssh-cert-cleanup@v1
+  uses: automation-alexson/.github-private/actions/ansible-ssh-cert-cleanup@v1
 ```
 
 Legacy key-only cleanup:
