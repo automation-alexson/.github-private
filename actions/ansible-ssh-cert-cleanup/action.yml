@@ -1,0 +1,25 @@
+name: Ansible SSH certificate cleanup
+description: Securely remove temp automation key, certificate, and CA material from RUNNER_TEMP.
+
+runs:
+  using: composite
+  steps:
+    - name: Remove Ansible SSH cert and key files
+      shell: bash
+      run: |
+        set +x
+        remove() {
+          local f="$1"
+          if [ -n "$f" ] && [ -f "$f" ]; then
+            if command -v shred >/dev/null 2>&1; then
+              shred -u "$f" 2>/dev/null || rm -f "$f"
+            else
+              rm -f "$f"
+            fi
+          fi
+        }
+
+        remove "${ANSIBLE_SSH_PRIVATE_KEY_FILE:-}"
+        remove "${ANSIBLE_SSH_CERTIFICATE_FILE:-}"
+        remove "${RUNNER_TEMP}/ssh-user-ca-private-key"
+        remove "${RUNNER_TEMP}/ansible-automation-key.pub"

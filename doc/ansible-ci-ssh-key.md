@@ -1,10 +1,10 @@
-# Ansible SSH private key in GitHub Actions
+# Ansible SSH authentication in GitHub Actions
 
-Standard pattern for any workflow that runs `ansible-playbook` on self-hosted runners.
+Standard pattern for workflows that run `ansible-playbook` on self-hosted runners.
 
-## Secrets source
+## Preferred: SSH user certificates (short-lived)
 
-Prefer **Infisical OIDC** in the **same job** as the playbook (not a separate fetch job):
+Use the composite action to load the automation private key, sign a short-lived OpenSSH user certificate with the eh168 SSH user CA, and configure Ansible/SSH clients.
 
 ```yaml
 permissions:
@@ -12,16 +12,65 @@ permissions:
   contents: read
 
 steps:
-  - uses: infrastructure-alexson/.github-private/actions/infisical-oidc-load@v1
+  - uses: actions/checkout@v5
+
+  - name: Prepare Ansible SSH user certificate
+    uses: infrastructure-alexson/.github-private/actions/ansible-ssh-cert-prep@v1
     with:
-      secret_path: /Ansible
-      recursive: "false"
-      secret_keys: ansible-ssh-private-key
+      signing_project_id: fca9f329-3988-40f8-a695-89fde921fc4d
+      principal: automation
+      cert_ttl: 1h
+
+  - name: Run Ansible playbook
+    working-directory: ansible
+    env:
+      ANSIBLE_PRIVATE_KEY_FILE: ${{ env.ANSIBLE_SSH_PRIVATE_KEY_FILE }}
+      ANSIBLE_SSH_COMMON_ARGS: ${{ env.ANSIBLE_SSH_COMMON_ARGS }}
+    run: |
+      set +x
+      set -euo pipefail
+      test -f "${ANSIBLE_SSH_PRIVATE_KEY_FILE}"
+      test -f "${ANSIBLE_SSH_CERTIFICATE_FILE}"
+      ansible-playbook playbook.yml -e ansible_user=automation
+
+  - name: Remove Ansible SSH cert and key files
+    if: always()
+    uses: infrastructure-alexson/.github-private/actions/ansible-ssh-cert-cleanup@v1
 ```
 
-Infisical key `ansible-ssh-private-key` → env var `ANSIBLE_SSH_PRIVATE_KEY` (masked in `GITHUB_ENV`).
+Fleet VMs must trust the CA (`infrastructure-alexson/ssh-ca-trust` **Deploy SSH CA trust** workflow) and allow principal `automation` via `AuthorizedPrincipalsFile`.
 
-Legacy repos may still use org secret `AUTOMATION_SSH_KEY`; map that into the same write step below.
+### Composite inputs
+
+| Input | Default | Meaning |
+|-------|---------|---------|
+| `signing_project_id` | (required) | Infisical project UUID for `ssh-user-ca-private-key` |
+| `principal` | `automation` | OpenSSH cert principal (`-n`) |
+| `cert_ttl` | `1h` | Validity passed to `ssh-keygen -V` |
+| `cert_identity` | `gha-<run_id>` | Certificate identity (`-I`) |
+
+### Infisical layout
+
+| Secret | Project | Path |
+|--------|---------|------|
+| `ansible-ssh-private-key` | `secrets-vi-5-a` | `/Ansible` |
+| `ssh-user-ca-private-key` | `ssh-ca-signing-0i-ei` | `/` |
+
+See [ssh-ca-trust doc/infisical-secrets.md](https://github.com/infrastructure-alexson/ssh-ca-trust/blob/main/doc/infisical-secrets.md).
+
+## Legacy: static private key only
+
+Use when fleet trust is not yet deployed. Load only `/Ansible/ansible-ssh-private-key`:
+
+```yaml
+- uses: infrastructure-alexson/.github-private/actions/infisical-oidc-load@v1
+  with:
+    secret_path: /Ansible
+    recursive: "false"
+    secret_keys: ansible-ssh-private-key
+```
+
+Then write a temp key file, run Ansible, delete the file (below).
 
 ## Write key file → run Ansible → delete file
 
@@ -29,13 +78,15 @@ Never pass key material on the `ansible-playbook` command line. Write a temp fil
 
 ### 1. Write SSH private key file from GITHUB_ENV
 
+Only needed for **legacy** flows (cert prep writes the key file automatically).
+
 ```yaml
 - name: Write SSH private key file from GITHUB_ENV
   run: |
     set +x
     set -euo pipefail
     umask 077
-    key="${ANSIBLE_SSH_PRIVATE_KEY:-}"   # or: "${AUTOMATION_SSH_KEY:-}" from secrets.*
+    key="${ANSIBLE_SSH_PRIVATE_KEY:-}"
     if [ -z "$key" ]; then
       echo "::error::ANSIBLE_SSH_PRIVATE_KEY is not set."
       exit 1
@@ -52,11 +103,14 @@ Never pass key material on the `ansible-playbook` command line. Write a temp fil
 
 ### 2. Run Ansible playbook
 
+With certificates, set **`ANSIBLE_SSH_COMMON_ARGS`** so Ansible passes `CertificateFile` to SSH.
+
 ```yaml
 - name: Run Ansible playbook
   working-directory: ansible
   env:
     ANSIBLE_PRIVATE_KEY_FILE: ${{ env.ANSIBLE_SSH_PRIVATE_KEY_FILE }}
+    ANSIBLE_SSH_COMMON_ARGS: ${{ env.ANSIBLE_SSH_COMMON_ARGS }}
   run: |
     set +x
     set -euo pipefail
@@ -68,7 +122,17 @@ Never pass key material on the `ansible-playbook` command line. Write a temp fil
 
 `ANSIBLE_PRIVATE_KEY_FILE` is Ansible’s supported env var (same as `ansible_ssh_private_key_file`). Do **not** use `-e ansible_ssh_private_key_file=...` unless you must override per play.
 
-### 3. Remove CI SSH private key file
+### 3. Remove CI SSH material
+
+With certificates:
+
+```yaml
+- name: Remove Ansible SSH cert and key files
+  if: always()
+  uses: infrastructure-alexson/.github-private/actions/ansible-ssh-cert-cleanup@v1
+```
+
+Legacy key-only cleanup:
 
 ```yaml
 - name: Remove CI SSH private key file
@@ -81,21 +145,26 @@ Never pass key material on the `ansible-playbook` command line. Write a temp fil
     fi
 ```
 
-## Reference implementation
+## Reference implementations
 
-[`haproxy-rocky9` deploy workflow](https://github.com/infrastructure-alexson/haproxy-rocky9/blob/main/.github/workflows/deploy-haproxy.yml).
+- Cert auth: [`haproxy-rocky9` deploy workflow](https://github.com/infrastructure-alexson/haproxy-rocky9/blob/main/.github/workflows/deploy-haproxy.yml)
+- Fleet trust deploy (static key until cutover): [`ssh-ca-trust` deploy workflow](https://github.com/infrastructure-alexson/ssh-ca-trust/blob/main/.github/workflows/deploy-ssh-ca-trust.yml)
 
 ## Env var summary
 
 | Variable | Meaning |
 |----------|---------|
-| `ANSIBLE_SSH_PRIVATE_KEY` | Key material from Infisical (or map from `AUTOMATION_SSH_KEY`) |
-| `ANSIBLE_SSH_PRIVATE_KEY_FILE` | Absolute path to the temp key file on disk |
-| `ANSIBLE_PRIVATE_KEY_FILE` | Set on the playbook step only; Ansible reads this |
+| `ANSIBLE_SSH_PRIVATE_KEY` | Key material from Infisical |
+| `ANSIBLE_SSH_PRIVATE_KEY_FILE` | Absolute path to the temp private key file |
+| `ANSIBLE_SSH_CERTIFICATE_FILE` | Signed `*-cert.pub` (cert prep only) |
+| `ANSIBLE_SSH_COMMON_ARGS` | `-o CertificateFile=... -o IdentitiesOnly=yes` |
+| `ANSIBLE_PRIVATE_KEY_FILE` | Set on the playbook step; Ansible reads this |
+| `SSH_USER_CA_PRIVATE_KEY` | CA signer (cert prep / issue workflows only) |
 
 ## Do not
 
 - Commit key files or write under the checkout directory.
 - Log key material (`echo`, `set -x`, multiline `::add-mask::` with embedded newlines).
 - Use a separate job to load Infisical secrets (`GITHUB_ENV` does not cross jobs).
-- Fetch all project secrets when only the SSH key is needed (`secret_keys` allowlist).
+- Fetch all project secrets when only specific keys are needed (`secret_keys` allowlist).
+- Store the CA private key in the main Infisical project (`secrets-vi-5-a`).

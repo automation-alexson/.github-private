@@ -16,6 +16,8 @@ from pathlib import Path
 ENV_ALIASES: dict[str, str] = {
     "ansible-ssh-private-key": "ANSIBLE_SSH_PRIVATE_KEY",
     "ansible-ssh-public-key": "ANSIBLE_SSH_PUBLIC_KEY",
+    "ssh-user-ca-public-key": "SSH_USER_CA_PUBLIC_KEY",
+    "ssh-user-ca-private-key": "SSH_USER_CA_PRIVATE_KEY",
     "haproxy_stats_password": "HAPROXY_STATS_PASSWORD",
     "haproxy_stats_user": "HAPROXY_STATS_USER",
     "ansible_inventory": "ANSIBLE_INVENTORY",
@@ -23,6 +25,10 @@ ENV_ALIASES: dict[str, str] = {
     "github-app-private-key": "AUTOMATION_GITHUB_APP_PRIVATE_KEY",
     "automation-github-app-id": "AUTOMATION_GITHUB_APP_ID",
     "automation-github-app-private-key": "AUTOMATION_GITHUB_APP_PRIVATE_KEY",
+    "github-runners-app-id": "GITHUB_RUNNERS_APP_ID",
+    "github-runners-app-private-key": "GITHUB_RUNNERS_APP_PRIVATE_KEY",
+    "github-runners-app-installation-id-infra": "GITHUB_RUNNERS_APP_INSTALLATION_ID_INFRA",
+    "github-runners-app-installation-id-gen": "GITHUB_RUNNERS_APP_INSTALLATION_ID_GEN",
 }
 
 # Keys stripped or redacted before any log/error output
